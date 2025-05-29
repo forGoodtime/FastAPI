@@ -1,0 +1,62 @@
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from typing import List
+from models import User, UserCreate, UserLogin, UserOut
+
+from models import Note, NoteCreate, NoteOut
+from database import async_session, init_db
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def on_startup():
+    await init_db()
+
+async def get_session() -> AsyncSession:
+    async with async_session() as session:
+        yield session
+
+@app.post("/notes/", response_model=NoteOut)
+async def create_note(note: NoteCreate, session: AsyncSession = Depends(get_session)) -> NoteOut:
+    db_note = Note.model_validate(note)
+    session.add(db_note)
+    await session.commit()
+    await session.refresh(db_note)
+    return db_note
+
+@app.get("/notes/", response_model=List[NoteOut])
+async def read_notes(skip: int = 0, limit: int = 10, session: AsyncSession = Depends(get_session)) -> List[NoteOut]:
+    statement = select(Note).offset(skip).limit(limit)
+    result = await session.execute(statement)
+    notes = result.scalars().all()
+    return notes
+
+@app.post("/register/", response_model=UserOut)
+async def register(user: UserCreate, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(User).where(User.username == user.username))
+    existing_user = result.scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists"
+        )
+    db_user = User.model_validate(user)
+    session.add(db_user)
+    await session.commit()
+    await session.refresh(db_user)
+    return db_user
+
+@app.post("/login/")
+async def login(user: UserLogin, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(User).where(User.username == user.username))
+    db_user = result.scalar_one_or_none()
+    if not db_user or db_user.password != user.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+    return {"message": "Login successful", "user": UserOut.model_validate(db_user)}
