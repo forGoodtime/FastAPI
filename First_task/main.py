@@ -1,10 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from typing import List
 from models import User, UserCreate, UserLogin, UserOut
-
-from security import get_password_hash, verify_password
+from security import get_password_hash, verify_password, create_access_token, ALGORITHM, get_current_user
 from models import Note, NoteCreate, NoteOut
 from database import async_session, init_db
 from dotenv import load_dotenv
@@ -46,19 +45,28 @@ async def register(user: UserCreate, session: AsyncSession = Depends(get_session
             detail="Username already exists"
         )
     hashed_password = get_password_hash(user.password)
-    db_user = User.model_validate(user)
+    db_user = User(username=user.username, password=hashed_password)
     session.add(db_user)
     await session.commit()
     await session.refresh(db_user)
     return db_user
 
 @app.post("/login/")
-async def login(user: UserLogin, session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(User).where(User.username == user.username))
+async def login(
+    username: str = Form(...),
+    password: str = Form(...),
+    session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(select(User).where(User.username == username))
     db_user = result.scalar_one_or_none()
-    if not db_user or not verify_password(db_user.password != user.password):
+    if not db_user or not verify_password(password, db_user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
-    return {"message": "Login successful", "user": UserOut.model_validate(db_user)}
+    access_token = create_access_token(data={"sub": db_user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/users/me/", response_model=UserOut)
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
