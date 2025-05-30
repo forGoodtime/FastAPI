@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import os
 from database import async_session
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -14,6 +16,16 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def require_role(role: str):
+    def checker(current_user: User = Depends(get_current_user)):
+        if current_user.role != role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted"
+            )
+        return current_user
+    return checker
 
 async def get_session() -> AsyncSession:
     async with async_session() as session:

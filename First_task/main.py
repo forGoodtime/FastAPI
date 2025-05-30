@@ -45,7 +45,7 @@ async def register(user: UserCreate, session: AsyncSession = Depends(get_session
             detail="Username already exists"
         )
     hashed_password = get_password_hash(user.password)
-    db_user = User(username=user.username, password=hashed_password)
+    db_user = User(username=user.username, password=hashed_password, role="user")
     session.add(db_user)
     await session.commit()
     await session.refresh(db_user)
@@ -70,3 +70,17 @@ async def login(
 @app.get("/users/me/", response_model=UserOut)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@app.get("/admin/users/", response_model=List[UserOut])
+async def read_users(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted"
+        )
+    result = await session.execute(select(User))
+    users = result.scalars().all()
+    return users
