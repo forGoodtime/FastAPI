@@ -4,6 +4,7 @@ from sqlmodel import select
 from typing import List
 from models import User, UserCreate, UserLogin, UserOut
 
+from security import get_password_hash, verify_password
 from models import Note, NoteCreate, NoteOut
 from database import async_session, init_db
 from dotenv import load_dotenv
@@ -44,6 +45,7 @@ async def register(user: UserCreate, session: AsyncSession = Depends(get_session
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already exists"
         )
+    hashed_password = get_password_hash(user.password)
     db_user = User.model_validate(user)
     session.add(db_user)
     await session.commit()
@@ -54,7 +56,7 @@ async def register(user: UserCreate, session: AsyncSession = Depends(get_session
 async def login(user: UserLogin, session: AsyncSession = Depends(get_session)):
     result = await session.execute(select(User).where(User.username == user.username))
     db_user = result.scalar_one_or_none()
-    if not db_user or db_user.password != user.password:
+    if not db_user or not verify_password(db_user.password != user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
