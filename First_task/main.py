@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Form, Path
+from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from typing import List
+from typing import List, Optional
 from models import User, UserCreate, UserLogin, UserOut
 from security import get_password_hash, verify_password, create_access_token, ALGORITHM, get_current_user
 from models import Note, NoteCreate, NoteUpdate, NoteOut  # убедитесь, что NoteUpdate импортирован
@@ -76,13 +76,19 @@ async def create_note(
 
 @app.get("/notes/", response_model=List[NoteOut])
 async def read_notes(
-    skip: int = 0,
-    limit: int = 10,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Search notes by title or content"),
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user)  # добавлено ограничение по пользователю
+    current_user: User = Depends(get_current_user)
 ) -> List[NoteOut]:
     statement = select(Note).where(Note.owner_id == current_user.id).offset(skip).limit(limit)
+    if search:
+        statement = statement.where(
+            (Note.title.ilike(f"%{search}%")) | (Note.content.ilike(f"%{search}%"))
+        )
     result = await session.execute(statement)
+    statement = statement.offset(skip).limit(limit)
     notes = result.scalars().all()
     return notes
 
