@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
@@ -7,6 +7,7 @@ class Note(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str
     content: str
+    owner_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -16,6 +17,13 @@ class Note(SQLModel, table=True):
 class NoteCreate(BaseModel):
     title: str
     content: str
+
+class NoteUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class NoteOut(BaseModel):
     id: int
