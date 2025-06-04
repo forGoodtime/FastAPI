@@ -13,6 +13,12 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+
   app:
     build: .
     command: /bin/sh -c "sleep 5 && uvicorn main:app --host 0.0.0.0 --port 8000"
@@ -22,8 +28,20 @@ services:
       - .env
     depends_on:
       - db
+      - redis
     ports:
       - "8000:8000"
+
+  worker:
+    build: .
+    command: celery -A celery_app. worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
 
 volumes:
   postgres_data:

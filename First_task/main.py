@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks
+from celery_app import send_email_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from typing import List, Optional
@@ -12,6 +13,11 @@ from datetime import datetime
 load_dotenv()
 
 app = FastAPI()
+
+@app.post("/send-email/")
+def send_email(email: str):
+    task = send_email_task.delay(email)
+    return {"message": "Email task submitted", "task_id": task.id}
 
 @app.on_event("startup")
 async def on_startup():
