@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks
+from ws_manager import ConnectionManager 
+from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect
 from celery_app import send_email_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -13,6 +14,18 @@ from datetime import datetime
 load_dotenv()
 
 app = FastAPI()
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.broadcast(f"Message: {data}")  # исправлено
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        await manager.broadcast("Client disconnected")   # исправлено
 
 @app.post("/send-email/")
 def send_email(email: str):
