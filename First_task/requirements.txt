@@ -39,3 +39,4 @@ watchfiles==1.0.5
 websockets==15.0.1
 celery==5.4.0
 redis==5.0.4
+pydantic-settings>=2.0.0

@@ -1,3 +1,4 @@
+from config import settings
 from redis_cache import redis_client
 from ws_manager import ConnectionManager 
 from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect

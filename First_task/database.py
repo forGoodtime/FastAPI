@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from config import settings
 load_dotenv()
 
 from sqlmodel import SQLModel
