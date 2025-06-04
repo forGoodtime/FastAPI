@@ -1,3 +1,4 @@
+from redis_cache import redis_client
 from ws_manager import ConnectionManager 
 from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect
 from celery_app import send_email_task
@@ -15,6 +16,16 @@ load_dotenv()
 
 app = FastAPI()
 manager = ConnectionManager()
+
+@app.get("/notes")
+async def get_notes():
+    cache_key = "notes:all"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        return json.loads(cached)
+    notes = await get_notes_from_db()  # предполагается, что эта функция реализована
+    await redos_client.set(cache_key, json.dumps(notes), ex=60)  # кэшируем на 60 секунд
+    return notes
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -65,6 +76,7 @@ async def update_note(
         setattr(note, key, value)
     note.updated_at = datetime.utcnow()
     session.add(note)
+    await redis_client.delete(f"note:{note_id}")
     await session.commit()
     await session.refresh(note)
     return note
@@ -78,6 +90,7 @@ async def delete_note(
     note = await session.get(Note, note_id)
     if not note or note.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Note not found")
+    await redis_client.delete(f"note:{note_id}")  # удаляем кэш для этой заметки
     await session.delete(note)
     await session.commit()
 
@@ -89,6 +102,7 @@ async def create_note(
 ) -> NoteOut:
     db_note = Note(**note.dict(), owner_id=current_user.id)
     session.add(db_note)
+    await redis_client.delete("notes:all")  # удаляем кэш для всех заметок
     await session.commit()
     await session.refresh(db_note)
     return db_note
