@@ -9,7 +9,7 @@ from typing import List, Optional
 from models import User, UserCreate, UserLogin, UserOut
 from security import get_password_hash, verify_password, create_access_token, ALGORITHM, get_current_user
 from models import Note, NoteCreate, NoteUpdate, NoteOut  # убедитесь, что NoteUpdate импортирован
-from database import async_session, init_db
+from database import get_session, init_db
 from dotenv import load_dotenv
 from datetime import datetime
 
