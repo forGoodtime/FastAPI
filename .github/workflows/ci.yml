@@ -54,4 +54,4 @@ jobs:
           pytest
 
       - name: Build Docker image
-        run: docker build -t fastapi-app .
+        run: docker build -t fastapi-app -f First_task/Dockerfile First_task
