@@ -1,4 +1,6 @@
 from config import settings
+import redis.asyncio as aioredis
+from middleware import RateLimiterMiddleware
 from redis_cache import redis_client
 from ws_manager import ConnectionManager 
 from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
@@ -21,6 +23,13 @@ app = FastAPI()
 Instrumentator().instrument(app).expose(app)
 load_dotenv()
 manager = ConnectionManager()
+
+app.add_middleware(
+    RateLimiterMiddleware,
+    get_redis=lambda: app.state.redis,
+    limit=5,
+    window=60
+)
 
 @app.get("/notes")
 async def get_notes():
@@ -51,6 +60,12 @@ def send_email(email: str):
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    app.state.redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await app.state.redis.close()
+
 
 async def get_session() -> AsyncSession:
     async with async_session() as session:
