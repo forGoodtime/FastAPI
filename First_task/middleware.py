@@ -10,7 +10,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.window = window
 
     async def dispatch(self, request, call_next):
-        redis = self.get_redis()  # Получаем redis-клиент
+        redis = self.get_redis()
+        if redis is None:
+            # Redis не инициализирован (например, во время тестов) — пропускаем лимитирование
+            return await call_next(request)
+
         client_ip = request.client.host
         key = f"rl:{client_ip}"
         now = int(time.time())

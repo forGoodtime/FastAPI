@@ -26,7 +26,7 @@ manager = ConnectionManager()
 
 app.add_middleware(
     RateLimiterMiddleware,
-    get_redis=lambda: app.state.redis,
+    get_redis=lambda: getattr(app.state, "redis", None),
     limit=5,
     window=60
 )
