@@ -4,6 +4,8 @@
 
 Это пример асинхронного API на FastAPI с поддержкой PostgreSQL, Redis и Celery. Проект развёрнут на Render.
 
+[FastAPI — официальный сайт](https://fastapi.tiangolo.com/)
+
 ## Стек
 
 - FastAPI
