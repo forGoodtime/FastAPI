@@ -68,6 +68,10 @@ docker-compose up --build
 - Swagger UI: http://localhost:8000/docs
 - Redoc: http://localhost:8000/redoc
 
+## Контакты
+
+Если у вас есть вопросы или предложения, пишите на [example@email.com](mailto:example@email.com)
+
 ## Лицензия
 
 MIT
