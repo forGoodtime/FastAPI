@@ -3,7 +3,7 @@ import redis.asyncio as aioredis
 from middleware import RateLimiterMiddleware
 from redis_cache import redis_client
 from ws_manager import ConnectionManager 
-from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Form, Path, Query, BackgroundTasks, WebSocket, WebSocketDisconnect, Request, Body
 from celery_app import send_email_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -19,7 +19,11 @@ import logging
 import sys
 import json 
 
-app = FastAPI()
+app = FastAPI(
+    title="Заметки и пользователи",
+    description="API для работы с заметками, пользователями и ограничением частоты запросов",
+    version="1.0.0"
+)
 Instrumentator().instrument(app).expose(app)
 load_dotenv()
 manager = ConnectionManager()
@@ -37,8 +41,8 @@ async def get_notes():
     cached = await redis_client.get(cache_key)
     if cached:
         return json.loads(cached)
-    notes = await get_notes_from_db()  # предполагается, что эта функция реализована
-    await redis_client.set(cache_key, json.dumps(notes), ex=60)  # кэшируем на 60 секунд
+    notes = await get_notes_from_db()
+    await redis_client.set(cache_key, json.dumps(notes), ex=60)
     return notes
 
 @app.websocket("/ws")
@@ -51,6 +55,59 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast("Client disconnected")
+
+@app.get(
+    "/notes/{note_id}",
+    response_model=NoteOut,
+    tags=["Заметки"],
+    summary="Получить заметку по ID",
+    description="Возвращает заметку по её идентификатору, если она принадлежит текущему пользователю.",
+    responses={
+        200: {"description": "Заметка найдена"},
+        404: {"description": "Заметка не найдена"},
+    },
+)
+async def read_note(
+    note_id: int = Path(..., gt=0, description="ID заметки", example=1),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    note = await session.get(Note, note_id)
+    if not note or note.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+@app.post(
+    "/notes/",
+    response_model=NoteOut,
+    tags=["Заметки"],
+    summary="Создать заметку",
+    description="Создаёт новую заметку.",
+    responses={201: {"description": "Заметка создана"}},
+)
+async def create_note(
+    note: NoteCreate = Body(
+        ...,
+        examples={
+            "default": {
+                "summary": "Пример создания заметки",
+                "description": "Пример тела запроса для создания заметки",
+                "value": {
+                    "title": "Моя заметка",
+                    "content": "Текст заметки"
+                }
+            }
+        }
+    ),
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+) -> NoteOut:
+    db_note = Note(**note.dict(), owner_id=current_user.id)
+    session.add(db_note)
+    await redis_client.delete("notes:all")
+    await session.commit()
+    await session.refresh(db_note)
+    return db_note
 
 @app.post("/send-email/")
 def send_email(email: str):
@@ -195,7 +252,6 @@ async def read_users(
     users = result.scalars().all()
     return users
 
-# --- Логирование и middleware ---
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
